@@ -29,26 +29,42 @@ void join_user(int sock_fd, char* user_name_, struct SBCP_Client *client){
 //    client[curr_index]->online_flag = 0;
 }
 
-/*
-void delete_user(int sock_fd, char* user_name, struct SBCP_Client *client){
+int isExist(char* user_name){
+    printf("Try to COMPARE.\n");
     int i;
     for(i = 0; i < user_number; i++){
-        if(client[i] ->sock_fd == sock_fd){
+        printf("Compared 1 : %s\n", user_name);
+        printf("Compared 2 : %s\n", client[i].username);
+//        printf("Compared result : %d\n", strcmp(user_name, client[i].username));
+        if((strcmp(user_name, client[i].username)) == 0){
+            printf("Warning: There is another client use the same username!!!\n");
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void delete_user(int sock_fd, struct SBCP_Client *client){
+    int i;
+    for(i = 0; i < user_number; i++){
+        if(client[i].sock_fd == sock_fd){
             if(i != (user_number - 1)){
-                client[i]->sock_fd = client[user_number - 1]->sock_fd;
-                strcpy(client[i]->user_name,client[user_number - 1]->user_name);
-                client[user_number - 1] -> online_flag = 0;
+                client[i].sock_fd = client[user_number - 1].sock_fd;
+                printf("The exited client : %s!\n", client[i].username);
+                strcpy(client[i].username,client[user_number - 1].username);
+                client[user_number - 1].online_flag = 0;
                 user_number--;
                 return;
             }else{
-                client[user_number - 1] -> online_flag = 0;
+                client[user_number - 1].online_flag = 0;
+                printf("The exited clien : %s!\n", client[user_number - 1].username);
                 user_number--;
                 return;
             }
         }
     }
 }
-*/
+
 void fwd_MSG(int socket_fd, struct SBCP_Message *message_from_client, struct SBCP_Message *message_to_client){
     struct SBCP_Attribute attribute;
     attribute.Type = USERNAME;
@@ -83,7 +99,7 @@ void fwd_MSG(int socket_fd, struct SBCP_Message *message_from_client, struct SBC
     }
 }
 
-void read_MSG(int socket_fd, struct SBCP_Message *message_from_client, struct SBCP_Message *message_to_client, struct SBCP_Client *client){
+void read_MSG(int socket_fd, struct SBCP_Message *message_from_client, struct SBCP_Message *message_to_client, struct SBCP_Client *client, fd_set *readfds, fd_set *fd_temp){
     int readno;
     readno = read(socket_fd, message_from_client, sizeof(struct SBCP_Message));
     if(readno < 0){
@@ -92,6 +108,14 @@ void read_MSG(int socket_fd, struct SBCP_Message *message_from_client, struct SB
         exit(0);
     }
     
+    if(readno <8){
+        printf("Someone leave the chat room!\n");
+        FD_CLR(socket_fd, fd_temp);
+        FD_CLR(socket_fd, readfds);
+        delete_user(socket_fd, client);
+        close(socket_fd);
+        return;
+    }
     
     if(message_from_client->Vrsn != 3 || (message_from_client->Type != JOIN && message_from_client->Type != SEND)){
         return;
@@ -101,12 +125,13 @@ void read_MSG(int socket_fd, struct SBCP_Message *message_from_client, struct SB
         return;
     } // can not read the header of attribute
     
+
     printf("Try to read...\n");
     
     if(message_from_client->Type == JOIN && message_from_client->attribute.Type == USERNAME){
         strcpy(user_name, message_from_client->attribute.Payload);
-        {
-        //if(!isExist(user_name)){
+        
+        if(!isExist(user_name)){
             printf("The joined user is %s.\n", user_name);
             if(user_number < Max_Client){
                 user_number++;
@@ -115,13 +140,16 @@ void read_MSG(int socket_fd, struct SBCP_Message *message_from_client, struct SB
             }else{
                 printf("Warning: The number of connected clients is reached upper limit! Cannot JOIN!!!\n");
             }
-            
+        }else{
+            close(socket_fd);
+            FD_CLR(socket_fd, fd_temp);
+            FD_CLR(socket_fd, readfds);
         }
     }
     
     if(message_from_client->Type == SEND && message_from_client->attribute.Type == MESSAGE){
         flag = 1;
-        printf("received message %s", message_from_client->attribute.Payload);
+//        printf("received message %s", message_from_client->attribute.Payload);
         printf("User %s says: %s", user_name, message_from_client->attribute.Payload);
 /*        int i;
         for(i = 0; i < user_number; i++){
@@ -209,13 +237,13 @@ int main(int argc, char* argv[]){
 //        printf("CAN SELECT!\n");
         for(i = 0; i < fdmax; i++){
             if(FD_ISSET(i, &fd_temp)){
-                printf("This is select i : %d\n", i);
+//                printf("This is select i : %d\n", i);
                 if(i == socket_id){
                     if((new_socket_id = accept(socket_id,(struct sockaddr *)&sin, &len)) <0){
                         perror("simplex - talk: accept\n");
                         exit(0);
                     }
-                    printf("CAN ACCEPT! And new_socket_id is : %d\n", new_socket_id);
+//                    printf("CAN ACCEPT! And new_socket_id is : %d\n", new_socket_id);
                     //read_MSG(new_socket_id, message_from_client, message_to_client, client);
                     FD_SET(new_socket_id, &readfds);
                     FD_SET(new_socket_id, &fd_temp);
@@ -223,12 +251,14 @@ int main(int argc, char* argv[]){
                         fdmax = new_socket_id + 1;
                     }
                 }else{
-                    read_MSG(i, message_from_client, message_to_client, client);
+                    read_MSG(i, message_from_client, message_to_client, client, &readfds, &fd_temp);
                     if(flag == 1){
+                        /*
                         printf("Now the user list:\n");
                         for(k = 0; k < user_number; k++){
                             printf("The %dst client is %s.\n", k, client[k].username);
                         }
+                        */
                         for(j = 0; j < fdmax; j++){
                             if(FD_ISSET(j, &readfds) && j != socket_id){
                                 fwd_MSG(j, message_from_client, message_to_client);

@@ -18,7 +18,7 @@
 
 #include "sbchead.h"
 char user_fwd_name[16];
-
+int eofflag = 1;
 /*
 typedef struct{
     unsigned int Type : 16;
@@ -79,6 +79,13 @@ void send_MSG(int socket_fd, struct SBCP_Message *message_to_server){
     char buf[PAYLOAD_LEN];
     fgets(buf, sizeof(buf) - 1, stdin);
     int lastIndex = strlen(buf) - 1;
+    
+    if(feof(stdin)){
+        printf("\nThere is a EOF! End this client!\n");
+        write(socket_fd, "", 0);
+        eofflag = 0;
+        return;
+    }
     if(buf[lastIndex] == '\n'){
         buf[lastIndex] == '\0';
     }
@@ -93,14 +100,15 @@ void send_MSG(int socket_fd, struct SBCP_Message *message_to_server){
     message_to_server->Length = 8 + strlen(buf);
     message_to_server->attribute = attribute;
     
-    printf("Ready to SEND...\n");
+//    printf("Ready to SEND...\n");
+    
     
     if(write(socket_fd, message_to_server, sizeof(struct SBCP_Message)) < 0){
         printf("Failed...\n");
         perror("Error : Failed to SEND to the server...\n");
         exit(0);
     }else{
-        printf("SEND message to the server successfully...\n");
+        printf("\nSEND message to the server successfully...\n\n");
 //        printf("The length is %d...\n", sizeof(struct SBCP_Message));
     }
     return;
@@ -127,7 +135,7 @@ void read_MSG(int socket_fd, struct SBCP_Message *message_from_server){
     
     if(message_from_server->attribute.Type == USERNAME){
         strcpy(user_fwd_name, message_from_server->attribute.Payload);
-        printf("The user is %s.\n", user_fwd_name);
+//        printf("The user is %s.\n", user_fwd_name);
     }
 
     if(message_from_server->attribute.Type == MESSAGE){
@@ -194,7 +202,7 @@ int main(int argc, char *argv[]){
     fdmax = socket_fd + 1;
     //End initialize. 
     
-    while(1){
+    while(eofflag){
 //        printf("Enter while loop for select again...\n");
         if(select(fdmax, &readfds,NULL ,NULL, NULL) < 0){
             perror("Error: connect\n");
@@ -213,7 +221,6 @@ int main(int argc, char *argv[]){
         FD_SET(STDIN,&readfds);
         FD_SET(socket_fd,&readfds);
     }
-    
     close(socket_fd);
 }
 
