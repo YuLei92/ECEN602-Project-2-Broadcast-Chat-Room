@@ -146,11 +146,21 @@ void read_MSG(int socket_fd, struct SBCP_Message *message_from_client, struct SB
             FD_CLR(socket_fd, readfds);
         }
     }
-    
-    if(message_from_client->Type == SEND && message_from_client->attribute.Type == MESSAGE){
+/*    
+    if(message_from_client->Type == SEND && message_from_client->attribute.Type == USERNAME){
+        strcpy(user_name, message_from_client->attribute.Payload);
+    }    
+*/    
+    if(flag == 0 && message_from_client->Type == SEND && message_from_client->attribute.Type == MESSAGE){
         flag = 1;
+        int n;
+        for(n = 0; n < user_number; n++){
+            if(client[n].sock_fd == socket_fd){
+                strcpy(user_name, client[n].username);
+            }
+        }
 //        printf("received message %s", message_from_client->attribute.Payload);
-        printf("User %s says: %s", user_name, message_from_client->attribute.Payload);
+//        printf("User %s says: %s", user_name, message_from_client->attribute.Payload);
 /*        int i;
         for(i = 0; i < user_number; i++){
             Flag_sent[i] = 1;
